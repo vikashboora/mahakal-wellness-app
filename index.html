@@ -1042,7 +1042,7 @@
 
     CART.forEach(function (c) {
       const p = PRODUCTS.find(function (x) { return x.code === c.code; });
-      if (p) { p.online_stock -= c.qty; p.physical_stock -= c.qty; }
+      if (p) { p.physical_stock -= c.qty; }
     });
     renderDeliveryModal(cartSnapshot);
     document.getElementById('deliveryModal').classList.add('show');
@@ -1554,8 +1554,12 @@
     box.innerHTML = '<div class="card" style="margin-top:4px;box-shadow:none;"><p class="section-label">Amount pending: ' + money(-bill.balance) + '</p>' +
       '<div class="field-row"><div class="field"><label>Mode</label><select id="payEditMode"><option>Cash</option><option>Online</option></select></div>' +
       '<div class="field"><label>Amount received</label><input type="number" id="payEditAmount" min="0" step="0.01" placeholder="0"></div></div>' +
-      '<button class="btn btn-primary btn-block" onclick="submitPaymentEdit(\'' + bill.invoiceNo + '\')">Record payment</button>' +
-      '<button class="btn btn-outline btn-block" style="margin-top:8px;" onclick=\'sendPaymentReminder(' + JSON.stringify({ invoiceNo: bill.invoiceNo, date: bill.date, mobile: bill.mobile, customerName: bill.customerName, due: -bill.balance }).replace(/'/g, "&#39;") + ')\'>Send Payment Reminder on WhatsApp</button></div>';
+      '<button class="btn btn-primary btn-block" id="recordPaymentBtn" type="button">Record payment</button>' +
+      '<button class="btn btn-outline btn-block" id="sendReminderBtn" type="button" style="margin-top:8px;">Send Payment Reminder on WhatsApp</button></div>';
+    document.getElementById('recordPaymentBtn').addEventListener('click', function () { submitPaymentEdit(bill.invoiceNo); });
+    document.getElementById('sendReminderBtn').addEventListener('click', function () {
+      sendPaymentReminder({ invoiceNo: bill.invoiceNo, date: bill.date, mobile: bill.mobile, customerName: bill.customerName, due: -bill.balance });
+    });
   }
 
   function sendPaymentReminder(info) {
@@ -1576,8 +1580,9 @@
     const { data, error } = await sb.rpc('add_payment', { p_invoice_no: invoiceNo, p_mode: mode, p_amount: amount });
     if (error) { showToast(error.message, true); return; }
     showToast(data.status === 'PAID' ? 'Fully settled.' : 'Payment recorded.');
-    viewBill(invoiceNo);
+    viewBill(invoiceNo, true);
     searchHistory();
+    if (document.getElementById('tab-accounting').classList.contains('active')) loadAccounting();
   }
 
   function hideDetail() { document.getElementById('detailModal').classList.remove('show'); }
