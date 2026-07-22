@@ -498,7 +498,7 @@
 
   <!-- ============ BILL DETAIL MODAL (Past Bill tab) ============ -->
   <div class="modal-overlay" id="detailModal">
-    <div class="modal-sheet">
+    <div class="modal-sheet" id="detailModalSheet" tabindex="-1">
       <div id="detailArea"></div>
       <div class="modal-actions"><button class="btn btn-outline" onclick="hideDetail()">Close</button><button class="btn btn-primary" onclick="printFromDetail()">Print</button></div>
       <div class="modal-actions"><button class="btn btn-outline" onclick="downloadPdfFromDetail()">Download PDF</button><button class="btn btn-gold" onclick="shareWhatsappFromDetail()">Share on WhatsApp</button></div>
@@ -1034,10 +1034,13 @@
       '</div>' : '';
 
     document.getElementById(targetId).innerHTML =
-      '<p style="font-size:10.5px;color:var(--ink-faint);margin:0 0 4px;">FSSAI: ' + escapeHtml(SETTINGS.fssai || '') + '</p>' +
-      '<div class="receipt-head"><img src="' + LOGO_DATA_URI + '" alt="Logo" style="width:64px;height:64px;border-radius:50%;margin-bottom:6px;">' +
-      '<h2>' + escapeHtml(SETTINGS.companyName || 'Mahakal Wellness') + '</h2>' +
-      '<p>' + escapeHtml(SETTINGS.address || '') + '</p><p>' + escapeHtml(SETTINGS.mobile || '') + (SETTINGS.mobile2 ? ' / ' + escapeHtml(SETTINGS.mobile2) : '') + '</p></div>' +
+      '<div class="receipt-head" style="border-bottom:2px solid var(--green-800);padding-bottom:14px;margin-bottom:14px;">' +
+        '<img src="' + LOGO_DATA_URI + '" alt="Logo" style="width:72px;height:72px;border-radius:50%;margin-bottom:8px;box-shadow:0 0 0 2px var(--gold-500);">' +
+        '<h2 style="font-size:22px;letter-spacing:.4px;margin-bottom:4px;">' + escapeHtml(SETTINGS.companyName || 'Mahakal Wellness') + '</h2>' +
+        (SETTINGS.address ? '<p style="font-size:12px;color:var(--ink-soft);margin:2px 0;">' + escapeHtml(SETTINGS.address) + '</p>' : '') +
+        (SETTINGS.mobile || SETTINGS.mobile2 ? '<p style="font-size:12px;color:var(--ink-soft);margin:2px 0;font-weight:600;">Mobile: ' + escapeHtml(SETTINGS.mobile || '') + (SETTINGS.mobile2 ? ', ' + escapeHtml(SETTINGS.mobile2) : '') + '</p>' : '') +
+        (SETTINGS.fssai ? '<p style="font-size:10px;color:var(--ink-faint);margin:6px 0 0;">FSSAI No: ' + escapeHtml(SETTINGS.fssai) + '</p>' : '') +
+      '</div>' +
       '<div class="receipt-meta"><span>Bill No: <strong>' + bill.invoiceNo + '</strong></span><span>' + dateStr + '</span></div>' +
       (bill.customerName || bill.mobile ? '<p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px;">' +
         escapeHtml(bill.customerName || 'Customer') + (bill.mobile ? ' · ' + escapeHtml(bill.mobile) : '') + '</p>' : '') +
@@ -1413,6 +1416,7 @@
     document.getElementById('paymentEditArea').innerHTML = '';
     if (allowPaymentEdit) renderPaymentEdit(bill);
     document.getElementById('detailModal').classList.add('show');
+    setTimeout(function () { document.getElementById('detailModalSheet').focus(); }, 60);
   }
 
   function renderOfficialDeliveryPaymentHistory(officialRows, deliveryRows, paymentRows) {
