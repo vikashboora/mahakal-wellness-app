@@ -1555,15 +1555,17 @@
       '<div class="field-row"><div class="field"><label>Mode</label><select id="payEditMode"><option>Cash</option><option>Online</option></select></div>' +
       '<div class="field"><label>Amount received</label><input type="number" id="payEditAmount" min="0" step="0.01" placeholder="0"></div></div>' +
       '<button class="btn btn-primary btn-block" onclick="submitPaymentEdit(\'' + bill.invoiceNo + '\')">Record payment</button>' +
-      '<button class="btn btn-outline btn-block" style="margin-top:8px;" onclick=\'sendPaymentReminder(' + JSON.stringify({ invoiceNo: bill.invoiceNo, mobile: bill.mobile, customerName: bill.customerName, due: -bill.balance }).replace(/'/g, "&#39;") + ')\'>Send Payment Reminder on WhatsApp</button></div>';
+      '<button class="btn btn-outline btn-block" style="margin-top:8px;" onclick=\'sendPaymentReminder(' + JSON.stringify({ invoiceNo: bill.invoiceNo, date: bill.date, mobile: bill.mobile, customerName: bill.customerName, due: -bill.balance }).replace(/'/g, "&#39;") + ')\'>Send Payment Reminder on WhatsApp</button></div>';
   }
 
   function sendPaymentReminder(info) {
     let digits = String(info.mobile || '').replace(/\D/g, '');
     if (!digits) { showToast('No mobile number on this bill.', true); return; }
     if (digits.length === 10) digits = '91' + digits;
-    const text = 'Hi ' + (info.customerName || '') + ', this is a reminder from Mahakal Wellness that ' + money(info.due) +
-      ' is pending for your bill ' + info.invoiceNo + '. Please clear it at your earliest convenience. Thank you!';
+    const dateStr = info.date ? new Date(info.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+    const text = 'Hi ' + (info.customerName || '') + ', this is a payment reminder from Mahakal Wellness.\n\n' +
+      'Bill: ' + info.invoiceNo + (dateStr ? '\nDate: ' + dateStr : '') + '\nAmount Due: ' + money(info.due) + '\n\n' +
+      'Please clear this at your earliest convenience. Thank you!';
     window.open('https://wa.me/' + digits + '?text=' + encodeURIComponent(text), '_blank');
   }
 
@@ -1761,12 +1763,18 @@
     loadCustomerBills();
   }
 
+  let currentCustomerBills = [];
   function sendCustomerReminder() {
     let digits = String(currentCustomerMobile || '').replace(/\D/g, '');
     if (!digits) { showToast('No mobile number for this customer.', true); return; }
     if (digits.length === 10) digits = '91' + digits;
-    const text = 'Hi ' + currentCustomerName + ', this is a reminder from Mahakal Wellness that you have a total pending balance of ' +
-      money(currentCustomerTotalDue) + ' across your recent bills. Please clear it at your earliest convenience. Thank you!';
+    const dueBills = currentCustomerBills.filter(function (b) { return b.balance < -0.005; });
+    let text = 'Hi ' + currentCustomerName + ', this is a payment reminder from Mahakal Wellness. You have pending dues on the following bill' + (dueBills.length > 1 ? 's' : '') + ':\n\n';
+    dueBills.forEach(function (b, idx) {
+      const dateStr = new Date(b.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      text += (idx + 1) + '. ' + b.invoiceNo + ' (' + dateStr + ') — ' + money(-b.balance) + '\n';
+    });
+    text += '\nTotal Due: ' + money(currentCustomerTotalDue) + '\n\nPlease clear this at your earliest convenience. Thank you!';
     window.open('https://wa.me/' + digits + '?text=' + encodeURIComponent(text), '_blank');
   }
 
@@ -1789,6 +1797,7 @@
     }
     const summary = { totalAmount: 0, totalSP: 0, totalQty: 0, totalBalance: 0, totalSPRemaining: 0, totalPendingQty: 0 };
     enriched.forEach(function (b) { summary.totalAmount += b.totalDP; summary.totalSP += b.totalSP; summary.totalQty += b.totalQty; if (b.balance < -0.005) summary.totalBalance += -b.balance; summary.totalSPRemaining += b.spRemaining; summary.totalPendingQty += b.pendingQty; });
+    currentCustomerBills = enriched;
     renderCustomerBillsSummary({ bills: enriched, summary: summary });
   }
 
