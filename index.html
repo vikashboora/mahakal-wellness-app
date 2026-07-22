@@ -149,9 +149,13 @@
   table.receipt-table th:first-child, table.receipt-table td:first-child{padding-left:12px; white-space:normal;}
   table.receipt-table th:not(:first-child), table.receipt-table td:not(:first-child){padding-left:16px;}
   table.receipt-table tbody tr:nth-child(even){background:var(--bg);}
-  .scroll-table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch; margin-bottom:10px; border:1px solid var(--line); border-radius:10px;}
+  .scroll-table-wrap{overflow:auto; max-height:65vh; -webkit-overflow-scrolling:touch; margin-bottom:10px; border:1px solid var(--line); border-radius:10px;}
   .scroll-table-wrap table.receipt-table{min-width:760px; margin-bottom:0;}
   .scroll-table-wrap table.receipt-table th:first-child, .scroll-table-wrap table.receipt-table td:first-child{padding-left:14px;}
+  .scroll-table-wrap table.receipt-table th{
+    font-size:13px; font-weight:700; color:var(--green-800); text-transform:uppercase;
+    background:var(--surface); position:sticky; top:0; z-index:2; border-bottom:2px solid var(--green-800); padding-top:10px; padding-bottom:10px;
+  }
   .receipt-total-row{display:flex; justify-content:space-between; padding:6px 0; font-size:13.5px;}
   .receipt-total-row.grand{font-weight:700; font-size:16.5px; color:var(--green-800); border-top:1px solid var(--line); margin-top:4px; padding-top:10px;}
   .badge{padding:2px 9px; border-radius:20px; font-size:10.5px; font-weight:700; white-space:nowrap;}
