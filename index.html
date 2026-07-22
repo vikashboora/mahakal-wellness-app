@@ -1361,26 +1361,36 @@
       if (q) query = query.or('invoice_no.ilike.%' + q + '%,customer_name.ilike.%' + q + '%,mobile.ilike.%' + q + '%');
       const { data, error } = await query;
       if (error) { showToast(error.message, true); return; }
-      renderHistory(data || []);
+      await renderHistory(data || []);
     }, 250);
   }
 
-  function renderHistory(rows) {
+  async function renderHistory(rows) {
     const box = document.getElementById('historyList');
     if (!rows.length) { box.innerHTML = '<div class="empty-cart">No bills found.</div>'; return; }
+    const invNos = rows.map(function (r) { return r.invoice_no; });
+    const { data: officialRows } = await sb.from('official_sessions').select('invoice_no, total_sp_used').in('invoice_no', invNos);
+    const spUsedByInvoice = {};
+    (officialRows || []).forEach(function (o) { spUsedByInvoice[o.invoice_no] = (spUsedByInvoice[o.invoice_no] || 0) + Number(o.total_sp_used); });
+
     box.innerHTML = rows.map(function (r) {
       const cls = r.status === 'PAID' ? 'badge-paid' : (r.status === 'PARTIAL' ? 'badge-partial' : 'badge-unpaid');
+      const payLabel = r.status === 'PAID' ? 'Paid' : (r.status === 'PARTIAL' ? 'Partial' : 'Unpaid');
       const dCls = r.delivery_status === 'Partial' ? 'badge-partial' : 'badge-paid';
+      const spUsed = spUsedByInvoice[r.invoice_no] || 0;
+      const spRemaining = Math.max(0, Number(r.total_sp) - spUsed);
+      const spCls = spRemaining > 0.0001 ? 'badge-partial' : 'badge-paid';
+      const spLabel = spRemaining > 0.0001 ? trimNum(spRemaining) + ' SP left' : 'SP complete';
       const dateStr = new Date(r.invoice_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-      return '<div class="list-row" data-inv="' + r.invoice_no + '"><div><div class="result-name">' + r.invoice_no + '</div><div class="result-meta">' + escapeHtml(r.customer_name || 'Walk-in') + ' · ' + dateStr + '</div></div>' +
-        '<div style="text-align:right;"><div class="cart-amount"><div class="amt">' + money(r.total_dp) + '</div><div class="pts">' + trimNum(r.total_sp) + ' SP</div></div>' +
-        '<div style="display:flex;gap:4px;justify-content:flex-end;margin-top:3px;"><span class="badge ' + cls + '">' + r.status + '</span><span class="badge ' + dCls + '">' + (r.delivery_status === 'Partial' ? 'Pending' : 'Delivered') + '</span></div></div></div>';
+      return '<div class="list-row" data-inv="' + r.invoice_no + '"><div><div class="result-name">' + r.invoice_no + '</div><div class="result-meta">' + escapeHtml(r.customer_name || 'Walk-in') + ' · ' + dateStr + '</div>' +
+        '<div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;"><span class="badge ' + cls + '">' + payLabel + '</span><span class="badge ' + dCls + '">' + (r.delivery_status === 'Partial' ? 'Pending' : 'Delivered') + '</span><span class="badge ' + spCls + '">' + spLabel + '</span></div></div>' +
+        '<div class="cart-amount"><div class="amt">' + money(r.total_dp) + '</div><div class="pts">' + trimNum(r.total_sp) + ' SP</div></div></div>';
     }).join('');
-    Array.from(box.querySelectorAll('.list-row')).forEach(function (row) { row.addEventListener('click', function () { viewBill(row.dataset.inv); }); });
+    Array.from(box.querySelectorAll('.list-row')).forEach(function (row) { row.addEventListener('click', function () { viewBill(row.dataset.inv, false); }); });
   }
 
   let currentDetailInvoice = null, currentDetailMobile = '';
-  async function viewBill(invoiceNo) {
+  async function viewBill(invoiceNo, allowPaymentEdit) {
     currentDetailInvoice = invoiceNo;
     const { data: header } = await sb.from('invoices').select('*').eq('invoice_no', invoiceNo).maybeSingle();
     if (!header) { showToast('Bill not found.', true); return; }
@@ -1399,7 +1409,9 @@
     };
     renderReceipt(bill, 'detailArea');
     renderOfficialDeliveryPaymentHistory(officialRows || [], deliveryRows || [], paymentRows || []);
-    renderPaymentEdit(bill);
+    // Payment recording is only offered when opened from Accounting - Past Bill is view/print/share only.
+    document.getElementById('paymentEditArea').innerHTML = '';
+    if (allowPaymentEdit) renderPaymentEdit(bill);
     document.getElementById('detailModal').classList.add('show');
   }
 
@@ -1485,7 +1497,7 @@
       return '<div class="list-row" data-inv="' + r.invoice_no + '"><div><div class="result-name">' + r.invoice_no + '</div><div class="result-meta">' + escapeHtml(r.customer_name || 'Walk-in') + ' · ' + dateStr + '</div></div>' +
         '<div style="text-align:right;"><div class="amt">' + money(r.total_dp) + '</div><div class="pts" style="color:' + (due ? 'var(--danger)' : 'var(--ok)') + ';">' + (due ? 'Due ' + money(-r.balance) : 'Settled') + '</div></div></div>';
     }).join('');
-    Array.from(box.querySelectorAll('.list-row')).forEach(function (row) { row.addEventListener('click', function () { viewBill(row.dataset.inv); }); });
+    Array.from(box.querySelectorAll('.list-row')).forEach(function (row) { row.addEventListener('click', function () { viewBill(row.dataset.inv, true); }); });
   }
 
   // ---------------- PENDING / DELIVERY UPDATE ----------------
