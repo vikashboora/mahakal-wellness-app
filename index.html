@@ -30,6 +30,7 @@
   .field-row{display:flex; gap:10px;}
   .field-row .field{flex:1;}
   .login-error{color:var(--danger); font-size:12.5px; min-height:16px; margin:8px 0 4px;}
+  .login-link{background:none; border:none; color:var(--green-700); font-size:12.5px; font-weight:600; cursor:pointer; margin-top:14px; text-decoration:underline;}
   .btn{border:none; border-radius:12px; padding:13px 18px; font-size:15px; font-weight:600; font-family:inherit; cursor:pointer; transition:transform .1s ease;}
   .btn:active{transform:scale(.98);}
   .btn-block{width:100%;}
@@ -183,6 +184,40 @@
       </div>
       <p class="login-error" id="loginError"></p>
       <button class="btn btn-primary btn-block" id="loginBtn" onclick="attemptLogin()">Log In</button>
+      <button class="login-link" type="button" onclick="showForgotPassword()">Forgot password?</button>
+
+      <div id="forgotPasswordArea" style="display:none;margin-top:14px;border-top:1px solid var(--line);padding-top:14px;text-align:left;">
+        <div class="field" style="margin-bottom:10px;">
+          <label for="forgotEmail">Confirm your email</label>
+          <input type="email" id="forgotEmail" onkeydown="if(event.key==='Enter'){event.preventDefault();submitForgotPassword();}">
+        </div>
+        <button class="btn btn-outline btn-block" onclick="submitForgotPassword()">Email me a reset link</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SET NEW PASSWORD (shown after clicking the reset-link email) ============ -->
+  <div class="login-overlay" id="resetPasswordOverlay" style="display:none;">
+    <div class="login-card">
+      <h2>Set a new password</h2>
+      <p class="hint" style="margin-bottom:16px;">Choose a new password for your account.</p>
+      <div class="field" style="text-align:left;"><label for="resetNewPassword">New password</label><input type="password" id="resetNewPassword"></div>
+      <div class="field" style="text-align:left;"><label for="resetConfirmPassword">Confirm new password</label><input type="password" id="resetConfirmPassword" onkeydown="if(event.key==='Enter'){event.preventDefault();submitResetPassword();}"></div>
+      <p class="login-error" id="resetPasswordError"></p>
+      <button class="btn btn-primary btn-block" onclick="submitResetPassword()">Update password</button>
+    </div>
+  </div>
+
+  <!-- ============ CHANGE PASSWORD (from inside the app) ============ -->
+  <div class="modal-overlay" id="changePasswordModal">
+    <div class="modal-sheet">
+      <h2 style="font-size:16px;color:var(--green-800);margin-bottom:14px;">Change password</h2>
+      <div class="field"><label for="cpNewPassword">New password</label><input type="password" id="cpNewPassword"></div>
+      <div class="field" style="margin-bottom:0;"><label for="cpConfirmPassword">Confirm new password</label><input type="password" id="cpConfirmPassword" onkeydown="if(event.key==='Enter'){event.preventDefault();submitChangePassword();}"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="document.getElementById('changePasswordModal').classList.remove('show')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitChangePassword()">Update</button>
+      </div>
     </div>
   </div>
 
@@ -190,7 +225,8 @@
     <header class="topbar">
       <div class="brand-mark"><img src="" id="logoImg" alt="Mahakal Wellness logo"></div>
       <div><h1>Mahakal Wellness</h1><p class="tagline">Billing Counter</p></div>
-      <button class="header-link" onclick="logout()">Logout</button>
+      <button class="header-link" onclick="openChangePassword()">Change password</button>
+      <button class="header-link" style="margin-left:10px;" onclick="logout()">Logout</button>
     </header>
 
     <nav class="tabs">
@@ -694,6 +730,61 @@
   }
 
   async function logout() { await sb.auth.signOut(); location.reload(); }
+
+  function showForgotPassword() {
+    document.getElementById('forgotPasswordArea').style.display = 'block';
+    document.getElementById('forgotEmail').value = document.getElementById('loginEmail').value.trim();
+    document.getElementById('forgotEmail').focus();
+  }
+
+  async function submitForgotPassword() {
+    const email = document.getElementById('forgotEmail').value.trim();
+    if (!email) { showToast('Enter your email.', true); return; }
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+    if (error) { showToast(error.message, true); return; }
+    showToast('Check your email for a reset link.');
+    document.getElementById('forgotPasswordArea').style.display = 'none';
+  }
+
+  // Supabase redirects back to this same page after the person clicks the emailed reset
+  // link, and fires a PASSWORD_RECOVERY auth event - that's our cue to show the reset form.
+  sb.auth.onAuthStateChange(function (event) {
+    if (event === 'PASSWORD_RECOVERY') {
+      document.getElementById('loginOverlay').style.display = 'none';
+      document.getElementById('resetPasswordOverlay').style.display = 'flex';
+    }
+  });
+
+  async function submitResetPassword() {
+    const pw = document.getElementById('resetNewPassword').value;
+    const confirmPw = document.getElementById('resetConfirmPassword').value;
+    const errEl = document.getElementById('resetPasswordError');
+    errEl.textContent = '';
+    if (!pw || pw.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+    if (pw !== confirmPw) { errEl.textContent = 'Passwords do not match.'; return; }
+    const { error } = await sb.auth.updateUser({ password: pw });
+    if (error) { errEl.textContent = error.message; return; }
+    document.getElementById('resetPasswordOverlay').style.display = 'none';
+    showToast('Password updated — you are now logged in.');
+    startApp();
+  }
+
+  function openChangePassword() {
+    document.getElementById('cpNewPassword').value = '';
+    document.getElementById('cpConfirmPassword').value = '';
+    document.getElementById('changePasswordModal').classList.add('show');
+  }
+
+  async function submitChangePassword() {
+    const pw = document.getElementById('cpNewPassword').value;
+    const confirmPw = document.getElementById('cpConfirmPassword').value;
+    if (!pw || pw.length < 6) { showToast('Password must be at least 6 characters.', true); return; }
+    if (pw !== confirmPw) { showToast('New passwords do not match.', true); return; }
+    const { error } = await sb.auth.updateUser({ password: pw });
+    if (error) { showToast(error.message, true); return; }
+    showToast('Password updated.');
+    document.getElementById('changePasswordModal').classList.remove('show');
+  }
 
   async function startApp() {
     document.getElementById('appRoot').style.display = 'block';
