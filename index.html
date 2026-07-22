@@ -140,6 +140,8 @@
   table.receipt-table th{text-align:left; font-size:11px; text-transform:uppercase; color:var(--ink-faint); padding:0 8px 6px 0; border-bottom:1px solid var(--line);}
   table.receipt-table td{padding:7px 8px 7px 0; border-bottom:1px solid var(--line);}
   table.receipt-table td.num, table.receipt-table th.num{text-align:right; padding-right:0;}
+  .scroll-table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch; margin-bottom:10px;}
+  .scroll-table-wrap table.receipt-table{min-width:560px; margin-bottom:0;}
   .receipt-total-row{display:flex; justify-content:space-between; padding:6px 0; font-size:13.5px;}
   .receipt-total-row.grand{font-weight:700; font-size:16.5px; color:var(--green-800); border-top:1px solid var(--line); margin-top:4px; padding-top:10px;}
   .badge{padding:2px 9px; border-radius:20px; font-size:10.5px; font-weight:700; white-space:nowrap;}
@@ -201,6 +203,7 @@
       <button class="tab" data-tab="expense" onclick="switchTab('expense')">Expense</button>
       <button class="tab" data-tab="official" onclick="switchTab('official')">Official</button>
       <button class="tab" data-tab="customers" onclick="switchTab('customers')">Customers</button>
+      <button class="tab" data-tab="stockreport" onclick="switchTab('stockreport')">Stock</button>
     </nav>
 
     <main>
@@ -385,6 +388,61 @@
     <section id="tab-customers" class="tab-panel">
       <div class="card"><p class="section-label">Find a customer</p><input type="text" id="customerSearch" class="search-input" placeholder="Name or mobile…" oninput="searchCustomersTab()"></div>
       <div class="card"><div id="customersList"><div class="empty-cart">Type above, or leave blank to see recent customers.</div></div></div>
+    </section>
+
+    <!-- ============ STOCK TAB ============ -->
+    <section id="tab-stockreport" class="tab-panel">
+      <div class="subtabs">
+        <button class="subtab active" data-subtab="online" onclick="switchStockSubtab('online')">Online Stock</button>
+        <button class="subtab" data-subtab="physical" onclick="switchStockSubtab('physical')">Physical Stock</button>
+        <button class="subtab" data-subtab="ordercalc" onclick="switchStockSubtab('ordercalc')">Order Calculation</button>
+      </div>
+
+      <div id="ssub-online" class="subtab-panel active">
+        <div class="card">
+          <p class="section-label">Quick range</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+            <button class="quickbtn" type="button" onclick="setOnlineStockRange('today')">Today</button>
+            <button class="quickbtn" type="button" onclick="setOnlineStockRange('week')">This week (Thu–Wed)</button>
+            <button class="quickbtn" type="button" onclick="setOnlineStockRange('net')">Net Stock (all-time)</button>
+          </div>
+          <div class="field-row"><div class="field"><label>From</label><input type="date" id="onlineStockFrom"></div><div class="field"><label>To</label><input type="date" id="onlineStockTo"></div></div>
+          <button class="btn btn-primary btn-block" onclick="applyOnlineStockFilter()">Apply filter</button>
+          <h2 style="font-size:14px;margin-top:14px;" id="onlineStockRangeLabel">Today</h2>
+        </div>
+        <div class="card">
+          <input type="text" id="onlineStockSearch" class="search-input" placeholder="Search product…" oninput="renderOnlineStockTable()" style="margin-bottom:10px;">
+          <div style="display:flex;gap:8px;margin-bottom:10px;"><button class="btn btn-outline" style="flex:1;" onclick="exportOnlineStockCsv()">Download Excel</button><button class="btn btn-outline" style="flex:1;" onclick="exportOnlineStockPdf()">Download PDF</button></div>
+          <div id="onlineStockTableWrap"><div class="empty-cart">Loading…</div></div>
+        </div>
+      </div>
+
+      <div id="ssub-physical" class="subtab-panel">
+        <div class="card">
+          <p class="section-label">Quick range</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+            <button class="quickbtn" type="button" onclick="setPhysicalStockRange('today')">Today</button>
+            <button class="quickbtn" type="button" onclick="setPhysicalStockRange('week')">This week (Thu–Wed)</button>
+            <button class="quickbtn" type="button" onclick="setPhysicalStockRange('net')">Net Stock (all-time)</button>
+          </div>
+          <div class="field-row"><div class="field"><label>From</label><input type="date" id="physicalStockFrom"></div><div class="field"><label>To</label><input type="date" id="physicalStockTo"></div></div>
+          <button class="btn btn-primary btn-block" onclick="applyPhysicalStockFilter()">Apply filter</button>
+          <h2 style="font-size:14px;margin-top:14px;" id="physicalStockRangeLabel">Today</h2>
+        </div>
+        <div class="card">
+          <input type="text" id="physicalStockSearch" class="search-input" placeholder="Search product…" oninput="renderPhysicalStockTable()" style="margin-bottom:10px;">
+          <div style="display:flex;gap:8px;margin-bottom:10px;"><button class="btn btn-outline" style="flex:1;" onclick="exportPhysicalStockCsv()">Download Excel</button><button class="btn btn-outline" style="flex:1;" onclick="exportPhysicalStockPdf()">Download PDF</button></div>
+          <div id="physicalStockTableWrap"><div class="empty-cart">Loading…</div></div>
+        </div>
+      </div>
+
+      <div id="ssub-ordercalc" class="subtab-panel">
+        <div class="card">
+          <input type="text" id="orderCalcSearch" class="search-input" placeholder="Search product…" oninput="renderOrderCalcTable()" style="margin-bottom:10px;">
+          <div style="display:flex;gap:8px;margin-bottom:10px;"><button class="btn btn-outline" style="flex:1;" onclick="exportOrderCalcCsv()">Download Excel</button><button class="btn btn-outline" style="flex:1;" onclick="exportOrderCalcPdf()">Download PDF</button></div>
+          <div id="orderCalcTableWrap"><div class="empty-cart">Loading…</div></div>
+        </div>
+      </div>
     </section>
     </main>
 
@@ -1029,6 +1087,7 @@
     if (name === 'official') loadOfficialPending();
     if (name === 'expense') searchExpenses();
     if (name === 'customers') searchCustomersTab();
+    if (name === 'stockreport' && !onlineStockLoadedOnce) switchStockSubtab('online');
   }
 
   function fmtDateInput_(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -1940,6 +1999,211 @@
     document.getElementById('officialPreviewModal').classList.remove('show');
     await loadProducts();
     loadOfficialPending();
+  }
+
+  // ---------------- STOCK TAB ----------------
+  let onlineStockData = [], physicalStockData = [], orderCalcData = [];
+  let onlineStockLoadedOnce = false, physicalStockLoadedOnce = false, orderCalcLoadedOnce = false;
+
+  function switchStockSubtab(name) {
+    const c = document.getElementById('tab-stockreport');
+    c.querySelectorAll('.subtab').forEach(function (b) { b.classList.toggle('active', b.dataset.subtab === name); });
+    c.querySelectorAll('.subtab-panel').forEach(function (p) { p.classList.remove('active'); });
+    document.getElementById('ssub-' + name).classList.add('active');
+    if (name === 'online' && !onlineStockLoadedOnce) { onlineStockLoadedOnce = true; setOnlineStockRange('today'); }
+    if (name === 'physical' && !physicalStockLoadedOnce) { physicalStockLoadedOnce = true; setPhysicalStockRange('today'); }
+    if (name === 'ordercalc' && !orderCalcLoadedOnce) { orderCalcLoadedOnce = true; loadOrderCalcReport(); }
+  }
+
+  function setOnlineStockRange(preset) {
+    const now = new Date();
+    if (preset === 'net') {
+      document.getElementById('onlineStockFrom').value = ''; document.getElementById('onlineStockTo').value = '';
+      document.getElementById('onlineStockRangeLabel').textContent = 'Net Stock (all-time)';
+      loadOnlineStockReport(); return;
+    }
+    let from = new Date(now);
+    if (preset === 'week') { const day = now.getDay(); const daysSinceThursday = (day - 4 + 7) % 7; from = new Date(now); from.setDate(now.getDate() - daysSinceThursday); }
+    document.getElementById('onlineStockFrom').value = fmtDateInput_(from);
+    document.getElementById('onlineStockTo').value = fmtDateInput_(now);
+    document.getElementById('onlineStockRangeLabel').textContent = preset === 'week' ? 'This week (Thu–Wed)' : 'Today';
+    loadOnlineStockReport();
+  }
+
+  async function loadOnlineStockReport() {
+    const from = document.getElementById('onlineStockFrom').value, to = document.getElementById('onlineStockTo').value;
+    document.getElementById('onlineStockTableWrap').innerHTML = '<div class="empty-cart">Loading…</div>';
+    const { data, error } = await sb.rpc('get_online_stock_report', { p_start_date: from || null, p_end_date: to || null });
+    if (error) { document.getElementById('onlineStockTableWrap').innerHTML = '<div class="empty-cart">Could not load.</div>'; showToast(error.message, true); return; }
+    onlineStockData = data || [];
+    renderOnlineStockTable();
+  }
+
+  function applyOnlineStockFilter() {
+    const from = document.getElementById('onlineStockFrom').value, to = document.getElementById('onlineStockTo').value;
+    document.getElementById('onlineStockRangeLabel').textContent = (from && to) ? (from + ' to ' + to) : 'Net Stock (all-time)';
+    loadOnlineStockReport();
+  }
+
+  function renderOnlineStockTable() {
+    const q = document.getElementById('onlineStockSearch').value.trim().toLowerCase();
+    const rows = q ? onlineStockData.filter(function (p) { return p.name.toLowerCase().indexOf(q) > -1 || p.code.toLowerCase().indexOf(q) > -1; }) : onlineStockData;
+    const wrap = document.getElementById('onlineStockTableWrap');
+    if (!rows.length) { wrap.innerHTML = '<div class="empty-cart">No products found.</div>'; return; }
+    let totQty = 0, totAmt = 0, totSp = 0, totUsed = 0;
+    const body = rows.map(function (p) {
+      const qty = Number(p.online_qty) || 0, amt = qty * p.dp, sp = qty * p.sp;
+      totQty += qty; totAmt += amt; totSp += sp; totUsed += Number(p.used_in_official) || 0;
+      return '<tr><td>' + escapeHtml(p.name) + ' <span class="result-meta">#' + p.code + '</span></td>' +
+        '<td class="num">' + trimNum(qty) + '</td><td class="num">' + money(amt) + '</td><td class="num">' + trimNum(sp) + '</td><td class="num">' + trimNum(p.used_in_official) + '</td></tr>';
+    }).join('');
+    wrap.innerHTML = '<div class="scroll-table-wrap"><table class="receipt-table"><thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Amount</th><th class="num">SP</th><th class="num">Used</th></tr></thead><tbody>' +
+      body + '</tbody><tfoot><tr style="font-weight:700;border-top:2px solid var(--green-800);"><td>Total</td><td class="num">' + trimNum(totQty) + '</td><td class="num">' + money(totAmt) + '</td><td class="num">' + trimNum(totSp) + '</td><td class="num">' + trimNum(totUsed) + '</td></tr></tfoot></table></div>';
+  }
+
+  function getFilteredOnlineStockRows_() {
+    const q = document.getElementById('onlineStockSearch').value.trim().toLowerCase();
+    return q ? onlineStockData.filter(function (p) { return p.name.toLowerCase().indexOf(q) > -1 || p.code.toLowerCase().indexOf(q) > -1; }) : onlineStockData;
+  }
+  function exportOnlineStockCsv() {
+    const rows = getFilteredOnlineStockRows_(); if (!rows.length) { showToast('Nothing to export.', true); return; }
+    const label = document.getElementById('onlineStockRangeLabel').textContent;
+    downloadCsv('online_stock_' + fmtDateInput_(new Date()) + '.csv', ['Product', 'Code', 'Qty', 'Amount', 'SP', 'Used in Official (' + label + ')'],
+      rows.map(function (p) { const qty = Number(p.online_qty) || 0; return [p.name, p.code, qty, (qty * p.dp).toFixed(2), (qty * p.sp).toFixed(2), p.used_in_official]; }));
+  }
+  function exportOnlineStockPdf() {
+    const rows = getFilteredOnlineStockRows_(); if (!rows.length) { showToast('Nothing to export.', true); return; }
+    downloadTablePdf('Online Stock Report', ['Product', 'Code', 'Qty', 'Amount', 'SP', 'Used'],
+      rows.map(function (p) { const qty = Number(p.online_qty) || 0; return [p.name, p.code, trimNum(qty), money(qty * p.dp), trimNum(qty * p.sp), trimNum(p.used_in_official)]; }));
+  }
+
+  function setPhysicalStockRange(preset) {
+    const now = new Date();
+    if (preset === 'net') {
+      document.getElementById('physicalStockFrom').value = ''; document.getElementById('physicalStockTo').value = '';
+      document.getElementById('physicalStockRangeLabel').textContent = 'Net Stock (all-time)';
+      loadPhysicalStockReport(); return;
+    }
+    let from = new Date(now);
+    if (preset === 'week') { const day = now.getDay(); const daysSinceThursday = (day - 4 + 7) % 7; from = new Date(now); from.setDate(now.getDate() - daysSinceThursday); }
+    document.getElementById('physicalStockFrom').value = fmtDateInput_(from);
+    document.getElementById('physicalStockTo').value = fmtDateInput_(now);
+    document.getElementById('physicalStockRangeLabel').textContent = preset === 'week' ? 'This week (Thu–Wed)' : 'Today';
+    loadPhysicalStockReport();
+  }
+
+  async function loadPhysicalStockReport() {
+    const from = document.getElementById('physicalStockFrom').value, to = document.getElementById('physicalStockTo').value;
+    document.getElementById('physicalStockTableWrap').innerHTML = '<div class="empty-cart">Loading…</div>';
+    const { data, error } = await sb.rpc('get_physical_stock_report', { p_start_date: from || null, p_end_date: to || null });
+    if (error) { document.getElementById('physicalStockTableWrap').innerHTML = '<div class="empty-cart">Could not load.</div>'; showToast(error.message, true); return; }
+    physicalStockData = data || [];
+    renderPhysicalStockTable();
+  }
+
+  function applyPhysicalStockFilter() {
+    const from = document.getElementById('physicalStockFrom').value, to = document.getElementById('physicalStockTo').value;
+    document.getElementById('physicalStockRangeLabel').textContent = (from && to) ? (from + ' to ' + to) : 'Net Stock (all-time)';
+    loadPhysicalStockReport();
+  }
+
+  function renderPhysicalStockTable() {
+    const q = document.getElementById('physicalStockSearch').value.trim().toLowerCase();
+    const rows = q ? physicalStockData.filter(function (p) { return p.name.toLowerCase().indexOf(q) > -1 || p.code.toLowerCase().indexOf(q) > -1; }) : physicalStockData;
+    const wrap = document.getElementById('physicalStockTableWrap');
+    if (!rows.length) { wrap.innerHTML = '<div class="empty-cart">No products found.</div>'; return; }
+    let totQty = 0, totAmt = 0, totSp = 0, totDelivered = 0;
+    const body = rows.map(function (p) {
+      const qty = Number(p.physical_qty) || 0, amt = qty * p.dp, sp = qty * p.sp;
+      totQty += qty; totAmt += amt; totSp += sp; totDelivered += Number(p.delivered_qty) || 0;
+      return '<tr><td>' + escapeHtml(p.name) + ' <span class="result-meta">#' + p.code + '</span></td>' +
+        '<td class="num">' + trimNum(qty) + '</td><td class="num">' + money(amt) + '</td><td class="num">' + trimNum(sp) + '</td><td class="num">' + trimNum(p.delivered_qty) + '</td></tr>';
+    }).join('');
+    wrap.innerHTML = '<div class="scroll-table-wrap"><table class="receipt-table"><thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Amount</th><th class="num">SP</th><th class="num">Delivered</th></tr></thead><tbody>' +
+      body + '</tbody><tfoot><tr style="font-weight:700;border-top:2px solid var(--green-800);"><td>Total</td><td class="num">' + trimNum(totQty) + '</td><td class="num">' + money(totAmt) + '</td><td class="num">' + trimNum(totSp) + '</td><td class="num">' + trimNum(totDelivered) + '</td></tr></tfoot></table></div>';
+  }
+
+  function getFilteredPhysicalStockRows_() {
+    const q = document.getElementById('physicalStockSearch').value.trim().toLowerCase();
+    return q ? physicalStockData.filter(function (p) { return p.name.toLowerCase().indexOf(q) > -1 || p.code.toLowerCase().indexOf(q) > -1; }) : physicalStockData;
+  }
+  function exportPhysicalStockCsv() {
+    const rows = getFilteredPhysicalStockRows_(); if (!rows.length) { showToast('Nothing to export.', true); return; }
+    const label = document.getElementById('physicalStockRangeLabel').textContent;
+    downloadCsv('physical_stock_' + fmtDateInput_(new Date()) + '.csv', ['Product', 'Code', 'Qty', 'Amount', 'SP', 'Delivered (' + label + ')'],
+      rows.map(function (p) { const qty = Number(p.physical_qty) || 0; return [p.name, p.code, qty, (qty * p.dp).toFixed(2), (qty * p.sp).toFixed(2), p.delivered_qty]; }));
+  }
+  function exportPhysicalStockPdf() {
+    const rows = getFilteredPhysicalStockRows_(); if (!rows.length) { showToast('Nothing to export.', true); return; }
+    downloadTablePdf('Physical Stock Report', ['Product', 'Code', 'Qty', 'Amount', 'SP', 'Delivered'],
+      rows.map(function (p) { const qty = Number(p.physical_qty) || 0; return [p.name, p.code, trimNum(qty), money(qty * p.dp), trimNum(qty * p.sp), trimNum(p.delivered_qty)]; }));
+  }
+
+  async function loadOrderCalcReport() {
+    document.getElementById('orderCalcTableWrap').innerHTML = '<div class="empty-cart">Loading…</div>';
+    const { data, error } = await sb.rpc('get_order_calculation_report');
+    if (error) { document.getElementById('orderCalcTableWrap').innerHTML = '<div class="empty-cart">Could not load.</div>'; showToast(error.message, true); return; }
+    orderCalcData = data || [];
+    renderOrderCalcTable();
+  }
+
+  function renderOrderCalcTable() {
+    const q = document.getElementById('orderCalcSearch').value.trim().toLowerCase();
+    const rows = q ? orderCalcData.filter(function (p) { return p.name.toLowerCase().indexOf(q) > -1 || p.code.toLowerCase().indexOf(q) > -1; }) : orderCalcData;
+    const wrap = document.getElementById('orderCalcTableWrap');
+    if (!rows.length) { wrap.innerHTML = '<div class="empty-cart">No products found.</div>'; return; }
+    const body = rows.map(function (p) {
+      const diff = Number(p.difference) || 0;
+      const diffColor = diff > 0 ? 'var(--gold-600)' : (diff < 0 ? 'var(--danger)' : 'inherit');
+      return '<tr><td>' + escapeHtml(p.name) + ' <span class="result-meta">#' + p.code + '</span></td>' +
+        '<td class="num">' + trimNum(p.online_qty) + '</td><td class="num">' + trimNum(p.physical_qty) + '</td>' +
+        '<td class="num">' + trimNum(p.official_use_qty) + '</td><td class="num">' + trimNum(p.delivered_qty) + '</td>' +
+        '<td class="num" style="color:' + diffColor + ';font-weight:700;">' + trimNum(diff) + '</td></tr>';
+    }).join('');
+    wrap.innerHTML = '<p class="hint" style="margin-bottom:8px;">Diff = Online Stock − Physical Stock</p>' +
+      '<div class="scroll-table-wrap"><table class="receipt-table"><thead><tr><th>Product</th><th class="num">Online</th><th class="num">Physical</th><th class="num">Off. Use</th><th class="num">Delivered</th><th class="num">Diff</th></tr></thead><tbody>' + body + '</tbody></table></div>';
+  }
+
+  function getFilteredOrderCalcRows_() {
+    const q = document.getElementById('orderCalcSearch').value.trim().toLowerCase();
+    return q ? orderCalcData.filter(function (p) { return p.name.toLowerCase().indexOf(q) > -1 || p.code.toLowerCase().indexOf(q) > -1; }) : orderCalcData;
+  }
+  function exportOrderCalcCsv() {
+    const rows = getFilteredOrderCalcRows_(); if (!rows.length) { showToast('Nothing to export.', true); return; }
+    downloadCsv('order_calculation_' + fmtDateInput_(new Date()) + '.csv', ['Product', 'Code', 'Online Stock', 'Physical Stock', 'Official Use', 'Delivered', 'Difference'],
+      rows.map(function (p) { return [p.name, p.code, p.online_qty, p.physical_qty, p.official_use_qty, p.delivered_qty, p.difference]; }));
+  }
+  function exportOrderCalcPdf() {
+    const rows = getFilteredOrderCalcRows_(); if (!rows.length) { showToast('Nothing to export.', true); return; }
+    downloadTablePdf('Order Calculation Report', ['Product', 'Code', 'Online', 'Physical', 'Off. Use', 'Delivered', 'Diff'],
+      rows.map(function (p) { return [p.name, p.code, trimNum(p.online_qty), trimNum(p.physical_qty), trimNum(p.official_use_qty), trimNum(p.delivered_qty), trimNum(p.difference)]; }));
+  }
+
+  // ---------------- SHARED CSV / TABLE-PDF HELPERS ----------------
+  function csvEscape_(val) {
+    const s = String(val === undefined || val === null ? '' : val);
+    if (s.indexOf(',') > -1 || s.indexOf('"') > -1 || s.indexOf('\n') > -1) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+  function downloadCsv(filename, headers, rows) {
+    let csv = headers.map(csvEscape_).join(',') + '\r\n';
+    rows.forEach(function (r) { csv += r.map(csvEscape_).join(',') + '\r\n'; });
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+  function downloadTablePdf(title, headers, rows) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'padding:14px;font-family:Arial,Helvetica,sans-serif;';
+    wrap.innerHTML = '<h2 style="color:#1E4A3D;margin-bottom:2px;">' + escapeHtml(title) + '</h2>' +
+      '<p style="font-size:10.5px;color:#999;margin:0 0 14px;">Generated ' + new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) + '</p>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr>' +
+      headers.map(function (h) { return '<th style="text-align:left;border-bottom:2px solid #333;padding:6px 5px;text-transform:uppercase;color:#555;">' + escapeHtml(h) + '</th>'; }).join('') +
+      '</tr></thead><tbody>' + rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td style="border-bottom:1px solid #ddd;padding:5px;">' + escapeHtml(String(c)) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table>';
+    document.body.appendChild(wrap);
+    html2pdf().set({ margin: 8, filename: title.replace(/\s+/g, '_') + '.pdf', jsPDF: { unit: 'mm', format: 'a4' } }).from(wrap).save().then(function () { document.body.removeChild(wrap); });
   }
 
   function shareWhatsapp() {
