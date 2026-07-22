@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Bill Status — Mahakal Wellness</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --green-900:#132E26; --green-800:#1E4A3D; --green-700:#2A5C4C; --green-100:#DCE9E3;
+    --gold-500:#D9A441; --gold-600:#B8842C; --gold-100:#F7E9C7;
+    --surface:#FFFFFF; --bg:#F6F5F1; --ink-soft:#555; --ink-faint:#8A8A8A; --line:#E7E4DC;
+    --danger:#C0392B; --danger-100:#FBE7E4; --ok:#2E7D4F; --ok-100:#E3F1E8;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:'Inter',sans-serif; background:var(--bg); color:#222; -webkit-font-smoothing:antialiased;}
+  h1,h2{font-family:'Fraunces',serif; margin:0;}
+  .topbar{background:var(--green-900); padding:16px; text-align:center;}
+  .topbar h1{font-size:19px; font-weight:600; color:#fff;}
+  .topbar p{margin:2px 0 0; font-size:12px; color:var(--green-100); opacity:.85;}
+  main{max-width:520px; margin:0 auto; padding:16px;}
+  .card{background:var(--surface); border-radius:16px; padding:18px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  .badge{display:inline-block; padding:3px 11px; border-radius:20px; font-size:12px; font-weight:700; margin:3px 6px 3px 0;}
+  .badge-paid{background:var(--ok-100); color:var(--ok);}
+  .badge-partial{background:var(--gold-100); color:var(--gold-600);}
+  .badge-unpaid{background:var(--danger-100); color:var(--danger);}
+  table{width:100%; border-collapse:collapse; font-size:13.5px; margin-top:10px;}
+  th{text-align:left; font-size:11px; text-transform:uppercase; color:var(--ink-faint); padding:0 8px 6px 0; border-bottom:1px solid var(--line);}
+  td{padding:8px 8px 8px 0; border-bottom:1px solid var(--line);}
+  td.num, th.num{text-align:right;}
+  .row{display:flex; justify-content:space-between; padding:6px 0; font-size:14px;}
+  .row.grand{font-weight:700; font-size:17px; color:var(--green-800); border-top:1px solid var(--line); margin-top:4px; padding-top:10px;}
+  .hint{font-size:12.5px; color:var(--ink-faint);}
+  .empty{padding:40px 20px; text-align:center; color:var(--ink-faint);}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Mahakal Wellness</h1>
+    <p>Bill Status</p>
+  </header>
+  <main id="mainArea">
+    <div class="empty">Loading…</div>
+  </main>
+
+<script>
+  const SUPABASE_URL = 'https://lrrqdmmugvizkbjfwneb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_3zfx8Ne9j2cX7-UmwjY4yg_FRE2xxrP';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  function money(n) { return '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }); }
+  function trimNum(n) { n = Math.round((Number(n) || 0) * 100) / 100; return n.toLocaleString('en-IN'); }
+  function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+  async function loadBill() {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const main = document.getElementById('mainArea');
+    if (!token) { main.innerHTML = '<div class="empty">No bill specified.</div>'; return; }
+
+    const { data, error } = await sb.rpc('get_public_bill_status', { p_share_token: token });
+    if (error || !data || !data.found) {
+      main.innerHTML = '<div class="empty">Bill not found. Please check the link.</div>';
+      return;
+    }
+
+    const payCls = data.status === 'PAID' ? 'badge-paid' : (data.status === 'PARTIAL' ? 'badge-partial' : 'badge-unpaid');
+    const payLabel = data.status === 'PAID' ? 'Paid' : (data.status === 'PARTIAL' ? 'Partially Paid' : 'Unpaid');
+    const delCls = data.deliveryStatus === 'Partial' ? 'badge-partial' : 'badge-paid';
+    const delLabel = data.deliveryStatus === 'Partial' ? 'Delivery Pending' : 'Fully Delivered';
+    const dateStr = new Date(data.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    const rows = (data.items || []).map(function (it) {
+      const pending = Number(it.pendingQty) || 0;
+      return '<tr><td>' + escapeHtml(it.name) + (pending > 0.0001 ? ' <span class="hint">(P ' + trimNum(pending) + ')</span>' : '') + '</td>' +
+        '<td class="num">' + trimNum(it.qty) + '</td><td class="num">' + money(it.amount) + '</td></tr>';
+    }).join('');
+
+    main.innerHTML =
+      '<div class="card">' +
+        '<h2 style="font-size:19px;color:var(--green-800);margin-bottom:2px;">' + data.invoiceNo + '</h2>' +
+        '<p class="hint" style="margin:0 0 10px;">' + dateStr + (data.customerName ? ' · ' + escapeHtml(data.customerName) : '') + '</p>' +
+        '<div><span class="badge ' + payCls + '">' + payLabel + (data.balance < -0.005 ? ' — Due ' + money(-data.balance) : '') + '</span>' +
+        '<span class="badge ' + delCls + '">' + delLabel + '</span></div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<p class="hint" style="text-transform:uppercase;font-weight:700;letter-spacing:.4px;margin-bottom:4px;">Items</p>' +
+        '<table><thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Amount</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+        '<div class="row"><span>Total Qty</span><span>' + trimNum(data.totalQty) + '</span></div>' +
+        '<div class="row grand"><span>Total Amount</span><span>' + money(data.totalDP) + '</span></div>' +
+        '<div class="row"><span>Cash Paid</span><span>' + money(data.cash) + '</span></div>' +
+        '<div class="row"><span>Online Paid</span><span>' + money(data.online) + '</span></div>' +
+        (data.balance < -0.005 ? '<div class="row" style="color:var(--danger);font-weight:700;"><span>Balance Due</span><span>' + money(-data.balance) + '</span></div>' : '') +
+      '</div>' +
+      '<p class="hint" style="text-align:center;">This page always shows the latest status of your bill.</p>';
+  }
+
+  loadBill();
+</script>
+</body>
+</html>

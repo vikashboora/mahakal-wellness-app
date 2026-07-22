@@ -1026,6 +1026,8 @@
     btn.disabled = false; btn.textContent = 'Save & Print';
     if (error) { showToast('Could not save: ' + error.message, true); return; }
 
+    const { data: tokenRow } = await sb.from('invoices').select('share_token').eq('invoice_no', invoiceNo).maybeSingle();
+
     let totalQty = 0, totalDP = 0, totalSP = 0;
     cartSnapshot.forEach(function (c) { totalQty += c.qty; totalDP += c.qty * c.dp; totalSP += c.qty * c.sp; });
     const paid = cash + online;
@@ -1033,7 +1035,7 @@
       invoiceNo: invoiceNo, date: new Date().toISOString(), totalQty: totalQty, totalDP: totalDP, totalSP: totalSP,
       cash: cash, online: online, balance: paid - totalDP, salesman: salesman,
       customerName: custName, mobile: custMobile, idName: idName, idNo: idNo,
-      referenceName: referenceName, referenceMobile: referenceMobile,
+      referenceName: referenceName, referenceMobile: referenceMobile, shareToken: tokenRow ? tokenRow.share_token : null,
       items: cartSnapshot.map(function (c) { return { name: c.name, qty: c.qty, dp: c.dp, sp: c.sp, pendingQty: 0 }; })
     };
 
@@ -1496,12 +1498,13 @@
     Array.from(box.querySelectorAll('.list-row')).forEach(function (row) { row.addEventListener('click', function () { viewBill(row.dataset.inv, false); }); });
   }
 
-  let currentDetailInvoice = null, currentDetailMobile = '';
+  let currentDetailInvoice = null, currentDetailMobile = '', currentDetailShareToken = null;
   async function viewBill(invoiceNo, allowPaymentEdit) {
     currentDetailInvoice = invoiceNo;
     const { data: header } = await sb.from('invoices').select('*').eq('invoice_no', invoiceNo).maybeSingle();
     if (!header) { showToast('Bill not found.', true); return; }
     currentDetailMobile = header.mobile || '';
+    currentDetailShareToken = header.share_token || null;
     const { data: items } = await sb.from('invoice_items').select('*').eq('invoice_no', invoiceNo);
     const { data: officialRows } = await sb.from('official_sessions').select('*').eq('invoice_no', invoiceNo).order('session_date', { ascending: false });
     const { data: deliveryRows } = await sb.from('delivery_log').select('*').eq('invoice_no', invoiceNo).order('log_date', { ascending: false });
@@ -1574,7 +1577,8 @@
     showToast('Preparing PDF…');
     html2pdf().set({ margin: 8, filename: currentDetailInvoice + '.pdf', jsPDF: { unit: 'mm', format: 'a5' } }).from(document.getElementById('detailArea')).save().then(function () {
       let digits = String(currentDetailMobile || '').replace(/\D/g, ''); if (digits.length === 10) digits = '91' + digits;
-      const waUrl = digits ? 'https://wa.me/' + digits + '?text=' + encodeURIComponent('Bill ' + currentDetailInvoice + ' — PDF downloaded, please attach it here.') : 'https://wa.me/?text=' + encodeURIComponent('Bill ' + currentDetailInvoice);
+      const text = buildBillShareText_(currentDetailInvoice, currentDetailShareToken, null);
+      const waUrl = digits ? 'https://wa.me/' + digits + '?text=' + encodeURIComponent(text) : 'https://wa.me/?text=' + encodeURIComponent(text);
       setTimeout(function () { window.open(waUrl, '_blank'); }, 900);
     });
   }
@@ -2326,6 +2330,13 @@
     html2pdf().set({ margin: 8, filename: title.replace(/\s+/g, '_') + '.pdf', jsPDF: { unit: 'mm', format: 'a4' } }).from(wrap).save().then(function () { document.body.removeChild(wrap); });
   }
 
+  function buildBillShareText_(invoiceNo, shareToken, totalDP) {
+    const baseUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+    let text = 'Hi! Your Mahakal Wellness bill ' + invoiceNo + (totalDP ? ' (' + money(totalDP) + ')' : '') + ' is ready.';
+    if (shareToken) text += '\nView bill status anytime: ' + baseUrl + 'bill.html?token=' + shareToken;
+    return text;
+  }
+
   function shareWhatsapp() {
     if (!lastSavedBill) { showToast('No bill to share.', true); return; }
     showToast('Preparing PDF…');
@@ -2333,9 +2344,8 @@
     html2pdf().set({ margin: 8, filename: lastSavedBill.invoiceNo + '.pdf', jsPDF: { unit: 'mm', format: 'a5' } }).from(el).save().then(function () {
       let digits = String(lastSavedBill.mobile || '').replace(/\D/g, '');
       if (digits.length === 10) digits = '91' + digits;
-      const waUrl = digits
-        ? 'https://wa.me/' + digits + '?text=' + encodeURIComponent('Bill ' + lastSavedBill.invoiceNo + ' — PDF downloaded, please attach it here.')
-        : 'https://wa.me/?text=' + encodeURIComponent('Bill ' + lastSavedBill.invoiceNo + ' — PDF downloaded, please attach it here.');
+      const text = buildBillShareText_(lastSavedBill.invoiceNo, lastSavedBill.shareToken, lastSavedBill.totalDP);
+      const waUrl = digits ? 'https://wa.me/' + digits + '?text=' + encodeURIComponent(text) : 'https://wa.me/?text=' + encodeURIComponent(text);
       showToast(digits ? 'PDF downloaded — opening their chat…' : 'PDF downloaded — pick a contact in WhatsApp.');
       setTimeout(function () { window.open(waUrl, '_blank'); }, 900);
     });
