@@ -209,8 +209,7 @@
 
 <script>
   // ============================================================================
-  // SETUP — fill these two lines in with your own project's values, then save.
-  // Find them in Supabase: Settings (gear icon) → API → Project URL and anon/public key.
+  // SETUP — your project's values are already filled in below.
   // ============================================================================
   const SUPABASE_URL = 'https://lrrqdmmugvizkbjfwneb.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_3zfx8Ne9j2cX7-UmwjY4yg_FRE2xxrP';
@@ -221,7 +220,6 @@
 
   let PRODUCTS = [];
   let CART = [];
-  let pendingProduct = null;
 
   function showToast(msg, isError) {
     const t = document.getElementById('toast');
@@ -275,10 +273,15 @@
     wireSearch();
   }
 
+  // Matches getProducts_() in Code.gs: hides products whose status is 'Inactive'
+  // or 'Discontinued' (case-insensitive), everything else counts as sellable.
   async function loadProducts() {
-    const { data, error } = await sb.from('products').select('*').neq('status', 'Inactive');
+    const { data, error } = await sb.from('products').select('*');
     if (error) { showToast('Could not load products: ' + error.message, true); return; }
-    PRODUCTS = data || [];
+    PRODUCTS = (data || []).filter(function (p) {
+      const s = String(p.status || 'Active').toLowerCase();
+      return s !== 'inactive' && s !== 'discontinued';
+    });
     document.getElementById('productCountHint').textContent = PRODUCTS.length + ' products loaded.';
   }
 
@@ -442,8 +445,8 @@
 
   // Right after saving, ask how much of each item was actually delivered right now
   // (defaults to the full quantity) - this is what reduces Physical Stock, same as
-  // the Apps Script version. If less than the full qty is entered, the rest stays
-  // "pending" on the bill for a Delivery Update step we'll add later.
+  // the Apps Script version (updateDeliveryQty). If less than the full qty is
+  // entered, the rest stays "pending" for a later Delivery Update step.
   async function confirmDeliveryFlow(invoiceNo, items) {
     const deliveryItems = items.map(function (c) {
       const enteredRaw = prompt('Delivered now: ' + c.name + ' (out of ' + c.qty + ')', String(c.qty));
