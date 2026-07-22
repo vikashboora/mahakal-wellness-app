@@ -489,6 +489,17 @@
 
       <div id="ssub-ordercalc" class="subtab-panel">
         <div class="card">
+          <p class="section-label">Quick range (for Off. Use / Delivered columns)</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+            <button class="quickbtn" type="button" onclick="setOrderCalcRange('today')">Today</button>
+            <button class="quickbtn" type="button" onclick="setOrderCalcRange('week')">This week (Thu–Wed)</button>
+            <button class="quickbtn" type="button" onclick="setOrderCalcRange('net')">Net (all-time)</button>
+          </div>
+          <div class="field-row"><div class="field"><label>From</label><input type="date" id="orderCalcFrom"></div><div class="field"><label>To</label><input type="date" id="orderCalcTo"></div></div>
+          <button class="btn btn-primary btn-block" onclick="applyOrderCalcFilter()">Apply filter</button>
+          <h2 style="font-size:14px;margin-top:14px;" id="orderCalcRangeLabel">Net (all-time)</h2>
+        </div>
+        <div class="card">
           <button class="btn btn-gold btn-block" style="margin-bottom:10px;" onclick="loadOrderCalcReport()">↻ Refresh</button>
           <input type="text" id="orderCalcSearch" class="search-input" placeholder="Search product…" oninput="renderOrderCalcTable()" style="margin-bottom:10px;">
           <div style="display:flex;gap:8px;margin-bottom:10px;"><button class="btn btn-outline" style="flex:1;" onclick="exportOrderCalcCsv()">Download Excel</button><button class="btn btn-outline" style="flex:1;" onclick="exportOrderCalcPdf()">Download PDF</button></div>
@@ -2307,9 +2318,31 @@
       rows.map(function (p) { const qty = Number(p.physical_qty) || 0; return [p.name, p.code, trimNum(qty), money(qty * p.dp), trimNum(qty * p.sp), trimNum(p.delivered_qty)]; }));
   }
 
+  function setOrderCalcRange(preset) {
+    const now = new Date();
+    if (preset === 'net') {
+      document.getElementById('orderCalcFrom').value = ''; document.getElementById('orderCalcTo').value = '';
+      document.getElementById('orderCalcRangeLabel').textContent = 'Net (all-time)';
+      loadOrderCalcReport(); return;
+    }
+    let from = new Date(now);
+    if (preset === 'week') { const day = now.getDay(); const daysSinceThursday = (day - 4 + 7) % 7; from = new Date(now); from.setDate(now.getDate() - daysSinceThursday); }
+    document.getElementById('orderCalcFrom').value = fmtDateInput_(from);
+    document.getElementById('orderCalcTo').value = fmtDateInput_(now);
+    document.getElementById('orderCalcRangeLabel').textContent = preset === 'week' ? 'This week (Thu–Wed)' : 'Today';
+    loadOrderCalcReport();
+  }
+
+  function applyOrderCalcFilter() {
+    const from = document.getElementById('orderCalcFrom').value, to = document.getElementById('orderCalcTo').value;
+    document.getElementById('orderCalcRangeLabel').textContent = (from && to) ? (from + ' to ' + to) : 'Net (all-time)';
+    loadOrderCalcReport();
+  }
+
   async function loadOrderCalcReport() {
+    const from = document.getElementById('orderCalcFrom').value, to = document.getElementById('orderCalcTo').value;
     document.getElementById('orderCalcTableWrap').innerHTML = '<div class="empty-cart">Loading…</div>';
-    const { data, error } = await sb.rpc('get_order_calculation_report');
+    const { data, error } = await sb.rpc('get_order_calculation_report', { p_start_date: from || null, p_end_date: to || null });
     if (error) { document.getElementById('orderCalcTableWrap').innerHTML = '<div class="empty-cart">Could not load.</div>'; showToast(error.message, true); return; }
     orderCalcData = data || [];
     renderOrderCalcTable();
