@@ -596,6 +596,7 @@
         <div class="stat-card warn"><div class="stat-label">SP Remaining</div><div class="stat-value" id="custTotalSPRemaining">0</div></div>
         <div class="stat-card warn"><div class="stat-label">Qty Pending Delivery</div><div class="stat-value" id="custTotalPendingQty">0</div></div>
       </div>
+      <button class="btn btn-outline btn-block" id="custReminderBtn" style="margin-bottom:14px;display:none;" onclick="sendCustomerReminder()">Send Payment Reminder on WhatsApp</button>
       <p class="section-label">Bills</p>
       <div id="customerBillsList"><div class="empty-cart">Loading…</div></div>
       <div class="modal-actions"><button class="btn btn-outline btn-block" onclick="document.getElementById('customerDetailModal').classList.remove('show')">Close</button></div>
@@ -1553,7 +1554,17 @@
     box.innerHTML = '<div class="card" style="margin-top:4px;box-shadow:none;"><p class="section-label">Amount pending: ' + money(-bill.balance) + '</p>' +
       '<div class="field-row"><div class="field"><label>Mode</label><select id="payEditMode"><option>Cash</option><option>Online</option></select></div>' +
       '<div class="field"><label>Amount received</label><input type="number" id="payEditAmount" min="0" step="0.01" placeholder="0"></div></div>' +
-      '<button class="btn btn-primary btn-block" onclick="submitPaymentEdit(\'' + bill.invoiceNo + '\')">Record payment</button></div>';
+      '<button class="btn btn-primary btn-block" onclick="submitPaymentEdit(\'' + bill.invoiceNo + '\')">Record payment</button>' +
+      '<button class="btn btn-outline btn-block" style="margin-top:8px;" onclick=\'sendPaymentReminder(' + JSON.stringify({ invoiceNo: bill.invoiceNo, mobile: bill.mobile, customerName: bill.customerName, due: -bill.balance }).replace(/'/g, "&#39;") + ')\'>Send Payment Reminder on WhatsApp</button></div>';
+  }
+
+  function sendPaymentReminder(info) {
+    let digits = String(info.mobile || '').replace(/\D/g, '');
+    if (!digits) { showToast('No mobile number on this bill.', true); return; }
+    if (digits.length === 10) digits = '91' + digits;
+    const text = 'Hi ' + (info.customerName || '') + ', this is a reminder from Mahakal Wellness that ' + money(info.due) +
+      ' is pending for your bill ' + info.invoiceNo + '. Please clear it at your earliest convenience. Thank you!';
+    window.open('https://wa.me/' + digits + '?text=' + encodeURIComponent(text), '_blank');
   }
 
   async function submitPaymentEdit(invoiceNo) {
@@ -1730,8 +1741,10 @@
     Array.from(box.querySelectorAll('.list-row')).forEach(function (row) { row.addEventListener('click', function () { openCustomerDetail(row.dataset.mobile, row.dataset.name); }); });
   }
 
+  let currentCustomerName = '';
   function openCustomerDetail(mobile, name) {
     currentCustomerMobile = mobile;
+    currentCustomerName = name || '';
     document.getElementById('customerDetailName').textContent = name || 'Customer';
     document.getElementById('customerDetailMobile').textContent = mobile || '';
     document.getElementById('customerDetailModal').classList.add('show');
@@ -1746,6 +1759,15 @@
     document.getElementById('customerToDate').value = fmtDateInput_(now);
     document.getElementById('customerRangeLabel').textContent = label;
     loadCustomerBills();
+  }
+
+  function sendCustomerReminder() {
+    let digits = String(currentCustomerMobile || '').replace(/\D/g, '');
+    if (!digits) { showToast('No mobile number for this customer.', true); return; }
+    if (digits.length === 10) digits = '91' + digits;
+    const text = 'Hi ' + currentCustomerName + ', this is a reminder from Mahakal Wellness that you have a total pending balance of ' +
+      money(currentCustomerTotalDue) + ' across your recent bills. Please clear it at your earliest convenience. Thank you!';
+    window.open('https://wa.me/' + digits + '?text=' + encodeURIComponent(text), '_blank');
   }
 
   async function loadCustomerBills() {
@@ -1770,6 +1792,7 @@
     renderCustomerBillsSummary({ bills: enriched, summary: summary });
   }
 
+  let currentCustomerTotalDue = 0;
   function renderCustomerBillsSummary(data) {
     const s = data.summary;
     document.getElementById('custTotalAmount').textContent = money(s.totalAmount);
@@ -1778,6 +1801,8 @@
     document.getElementById('custTotalBalance').textContent = money(s.totalBalance);
     document.getElementById('custTotalSPRemaining').textContent = trimNum(s.totalSPRemaining);
     document.getElementById('custTotalPendingQty').textContent = trimNum(s.totalPendingQty);
+    currentCustomerTotalDue = s.totalBalance;
+    document.getElementById('custReminderBtn').style.display = s.totalBalance > 0.005 ? 'block' : 'none';
     const box = document.getElementById('customerBillsList');
     if (!data.bills.length) { box.innerHTML = '<div class="empty-cart">No bills in this range.</div>'; return; }
     box.innerHTML = data.bills.map(function (b) {
@@ -2334,6 +2359,27 @@
     const baseUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
     let text = 'Hi! Your Mahakal Wellness bill ' + invoiceNo + (totalDP ? ' (' + money(totalDP) + ')' : '') + ' is ready.';
     if (shareToken) text += '\nView bill status anytime: ' + baseUrl + 'bill.html?token=' + shareToken;
+    text += '\n\nMAHAKAL SP BILLING FORMAT:\n' +
+      'CASH MEMO NO ( IF GIVEN):____\n' +
+      'BILL NO (MW000______) :' + invoiceNo + '\n' +
+      'DS NAME:______\n' +
+      'DS ID:_____\n' +
+      'MOBILE NO:_____\n' +
+      'SP FOR BILLING:____\n' +
+      'GREENING/REPURCHASE:_____\n' +
+      'SAO/SGO:______\n' +
+      'KYC (YES/NO):____\n' +
+      'SR NO   PRODUCT NAME         QTY            SP\n' +
+      '1.\n2.\n3.\n4.\n5.\n6.\n' +
+      'Notes:-\n' +
+      'Please send a message on WhatsApp in this format for SP billing.\n' +
+      'कृपया SP बिलिंग के लिए इस प्रारूप में व्हाट्सएप पर एक संदेश भेजें।\n' +
+      'Only the details sent in this format on WhatsApp will be processed.\n' +
+      'व्हाट्सएप पर इस फॉर्मेट में भेजे हुए विवरण ही प्रोसेस होंगे।\n' +
+      'Send different details for billing on multiple DS IDs within the same order ID.\n' +
+      'एक ही ऑर्डर आईडी में एक से ज्यादा डीएस आईडी पर बिलिंग के लिए अलग-अलग डिटेल्स भेजें।\n' +
+      'SP billing will not be done after 7 days.\n' +
+      '7 दिनों के बाद एसपी बिलिंग नहीं होगी।';
     return text;
   }
 
