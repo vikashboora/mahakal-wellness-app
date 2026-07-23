@@ -2124,17 +2124,23 @@
         '<div class="cart-amount"><div class="amt oitemAmt">' + money(it.qty * it.dp) + '</div><div class="pts oitemSp">' + trimNum(it.qty * it.sp) + ' SP</div></div></div></div>';
     }).join('');
     const qtyInputs = Array.from(box.querySelectorAll('.oitemQty'));
+    function checkOfficialItemQtyExceeded_(input) {
+      const row = input.closest('.cart-item');
+      const item = officialSessionItems.find(function (it) { return it.code === row.dataset.code; });
+      if (officialSource === 'Same' && item && Number(input.value) > item.maxQty) { showOfficialQtyExceedPopup(item, input); return true; }
+      return false;
+    }
     qtyInputs.forEach(function (input, idx) {
       input.addEventListener('input', function () { updateOfficialItemQtyFromInput(input); });
       input.addEventListener('keydown', function (e) {
         const isTabForward = (e.key === 'Tab' && !e.shiftKey);
         if (e.key !== 'Enter' && !isTabForward) return;
         e.preventDefault();
-        const row = input.closest('.cart-item');
-        const item = officialSessionItems.find(function (it) { return it.code === row.dataset.code; });
-        if (officialSource === 'Same' && item && Number(input.value) > item.maxQty) { showOfficialQtyExceedPopup(item, input); return; }
+        if (checkOfficialItemQtyExceeded_(input)) return;
         if (idx < qtyInputs.length - 1) { qtyInputs[idx + 1].focus(); qtyInputs[idx + 1].select(); } else { document.getElementById('officialReviewBtn').focus(); }
       });
+      // Catches mouse-based navigation (clicking elsewhere) too, not just Tab/Enter.
+      input.addEventListener('blur', function () { if (!officialQtyExceedPopupOpen) checkOfficialItemQtyExceeded_(input); });
     });
     Array.from(box.querySelectorAll('.oitemRemove')).forEach(function (btn) { btn.addEventListener('click', function () { removeOfficialItem(btn.closest('.cart-item').dataset.code); }); });
     updateOfficialTotalsDisplay();
