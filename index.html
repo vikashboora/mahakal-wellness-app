@@ -181,6 +181,7 @@
 <body>
 
   <div id="printDuplicateArea" style="display:none;"></div>
+  <div id="retailDetailPrintArea" style="display:none;"></div>
 
   <div class="login-overlay" id="loginOverlay">
     <div class="login-card">
@@ -275,6 +276,11 @@
           </div>
         </div>
         <div id="cartList"><div class="empty-cart">Search above and tap a product to add it to this bill.</div></div>
+        <div id="retailSummary" style="display:none;margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
+          <div class="receipt-total-row"><span>Total MRP</span><span id="retailTotalMrp">₹0</span></div>
+          <div class="receipt-total-row"><span>Discount</span><span id="retailDiscountAmt">₹0</span></div>
+          <div class="receipt-total-row grand"><span>Net Amount</span><span id="retailNetAmt">₹0</span></div>
+        </div>
       </div>
 
       <div class="card">
@@ -285,7 +291,11 @@
         </div>
         <div class="field" style="margin-bottom:0;">
           <label for="custType">Customer type</label>
-          <select id="custType"><option>Retail</option><option>Distributor</option><option>Wholesale</option></select>
+          <select id="custType" onchange="toggleRetailDiscount()"><option>Retail</option><option>Distributor</option><option>Wholesale</option></select>
+        </div>
+        <div class="field" id="discountField" style="margin-bottom:0;margin-top:10px;">
+          <label for="discountPercent">Discount % (on MRP)</label>
+          <input type="number" id="discountPercent" min="0" max="100" step="0.01" placeholder="0" oninput="renderTotals()">
         </div>
       </div>
 
@@ -936,7 +946,7 @@
     if (!p) return;
     const existing = CART.find(function (c) { return c.code === p.code; });
     if (existing) existing.qty += qty;
-    else CART.push({ code: p.code, name: p.name, dp: Number(p.dp), sp: Number(p.sp), qty: qty });
+    else CART.push({ code: p.code, name: p.name, dp: Number(p.dp), sp: Number(p.sp), mrp: Number(p.mrp) || 0, qty: qty });
     renderCart();
     document.getElementById('billQtyModal').classList.remove('show');
     document.getElementById('searchInput').value = '';
@@ -989,18 +999,36 @@
     renderTotals();
   }
 
+  function toggleRetailDiscount() {
+    const isRetail = document.getElementById('custType').value === 'Retail';
+    document.getElementById('discountField').style.display = isRetail ? 'block' : 'none';
+    document.getElementById('retailSummary').style.display = isRetail ? 'block' : 'none';
+    renderTotals();
+  }
+
   function renderTotals() {
-    let qty = 0, amount = 0, sp = 0;
-    CART.forEach(function (c) { qty += c.qty; amount += c.qty * c.dp; sp += c.qty * c.sp; });
+    let qty = 0, amount = 0, sp = 0, totalMrp = 0;
+    CART.forEach(function (c) { qty += c.qty; amount += c.qty * c.dp; sp += c.qty * c.sp; totalMrp += c.qty * (c.mrp || 0); });
     document.getElementById('cartHeaderAmt').textContent = money(amount);
     document.getElementById('cartHeaderSP').textContent = trimNum(sp) + ' SP';
     document.getElementById('grandTotal').textContent = money(amount);
     document.getElementById('grandSP').textContent = trimNum(sp) + ' SP';
     document.getElementById('subTotals').textContent = trimNum(qty) + ' qty';
 
+    const isRetail = document.getElementById('custType').value === 'Retail';
+    const discountPercent = isRetail ? (Number(document.getElementById('discountPercent').value) || 0) : 0;
+    const discountAmount = Math.round(totalMrp * discountPercent) / 100;
+    const netAmount = totalMrp - discountAmount;
+    if (isRetail) {
+      document.getElementById('retailTotalMrp').textContent = money(totalMrp);
+      document.getElementById('retailDiscountAmt').textContent = money(discountAmount) + (discountPercent ? ' (' + discountPercent + '%)' : '');
+      document.getElementById('retailNetAmt').textContent = money(netAmount);
+    }
+    const amountDue = isRetail ? netAmount : amount;
+
     const cash = Number(document.getElementById('payCash').value) || 0;
     const online = Number(document.getElementById('payOnline').value) || 0;
-    const balance = (cash + online) - amount;
+    const balance = (cash + online) - amountDue;
     const balEl = document.getElementById('balanceLine');
     const balVal = document.getElementById('balanceValue');
     if (Math.abs(balance) < 0.005) { balEl.className = 'balance-line balance-settled'; balVal.textContent = 'Settled'; }
@@ -1011,8 +1039,13 @@
   }
 
   function fillFullCash() {
-    let amount = 0;
-    CART.forEach(function (c) { amount += c.qty * c.dp; });
+    let amount = 0, totalMrp = 0;
+    CART.forEach(function (c) { amount += c.qty * c.dp; totalMrp += c.qty * (c.mrp || 0); });
+    const isRetail = document.getElementById('custType').value === 'Retail';
+    if (isRetail) {
+      const discountPercent = Number(document.getElementById('discountPercent').value) || 0;
+      amount = totalMrp - (Math.round(totalMrp * discountPercent) / 100);
+    }
     const online = Number(document.getElementById('payOnline').value) || 0;
     document.getElementById('payCash').value = Math.max(0, amount - online);
     renderTotals();
@@ -1025,6 +1058,7 @@
     const cartSnapshot = CART.slice();
     const custName = document.getElementById('custName').value.trim();
     const custMobile = document.getElementById('custMobile').value.trim();
+    const custType = document.getElementById('custType').value;
     const idName = document.getElementById('idName').value.trim();
     const idNo = document.getElementById('idNo').value.trim();
     const referenceName = document.getElementById('referenceName').value.trim();
@@ -1032,12 +1066,14 @@
     const cash = Number(document.getElementById('payCash').value) || 0;
     const online = Number(document.getElementById('payOnline').value) || 0;
     const salesman = document.getElementById('salesman').value.trim();
+    const discountPercent = custType === 'Retail' ? (Number(document.getElementById('discountPercent').value) || 0) : 0;
 
     const payload = {
-      p_customer_name: custName, p_mobile: custMobile, p_customer_type: document.getElementById('custType').value,
+      p_customer_name: custName, p_mobile: custMobile, p_customer_type: custType,
       p_cash: cash, p_online: online, p_salesman: salesman, p_remark: document.getElementById('remark').value.trim(),
       p_id_name: idName, p_id_no: idNo, p_reference_name: referenceName, p_reference_mobile: referenceMobile,
-      p_items: cartSnapshot.map(function (c) { return { code: c.code, name: c.name, qty: c.qty, dp: c.dp, sp: c.sp }; })
+      p_discount_percent: discountPercent,
+      p_items: cartSnapshot.map(function (c) { return { code: c.code, name: c.name, qty: c.qty, dp: c.dp, sp: c.sp, mrp: c.mrp || 0 }; })
     };
     const { data: invoiceNo, error } = await sb.rpc('save_invoice', payload);
     btn.disabled = false; btn.textContent = 'Save & Print';
@@ -1045,15 +1081,19 @@
 
     const { data: tokenRow } = await sb.from('invoices').select('share_token').eq('invoice_no', invoiceNo).maybeSingle();
 
-    let totalQty = 0, totalDP = 0, totalSP = 0;
-    cartSnapshot.forEach(function (c) { totalQty += c.qty; totalDP += c.qty * c.dp; totalSP += c.qty * c.sp; });
+    let totalQty = 0, totalDP = 0, totalSP = 0, totalMrp = 0;
+    cartSnapshot.forEach(function (c) { totalQty += c.qty; totalDP += c.qty * c.dp; totalSP += c.qty * c.sp; totalMrp += c.qty * (c.mrp || 0); });
+    const discountAmount = custType === 'Retail' ? (Math.round(totalMrp * discountPercent) / 100) : 0;
+    const netAmount = custType === 'Retail' ? (totalMrp - discountAmount) : 0;
+    const amountDue = custType === 'Retail' ? netAmount : totalDP;
     const paid = cash + online;
     lastSavedBill = {
       invoiceNo: invoiceNo, date: new Date().toISOString(), totalQty: totalQty, totalDP: totalDP, totalSP: totalSP,
-      cash: cash, online: online, balance: paid - totalDP, salesman: salesman,
+      totalMrp: totalMrp, discountPercent: discountPercent, discountAmount: discountAmount, netAmount: netAmount,
+      cash: cash, online: online, balance: paid - amountDue, salesman: salesman, customerType: custType,
       customerName: custName, mobile: custMobile, idName: idName, idNo: idNo,
       referenceName: referenceName, referenceMobile: referenceMobile, shareToken: tokenRow ? tokenRow.share_token : null,
-      items: cartSnapshot.map(function (c) { return { name: c.name, qty: c.qty, dp: c.dp, sp: c.sp, pendingQty: 0 }; })
+      items: cartSnapshot.map(function (c) { return { name: c.name, qty: c.qty, dp: c.dp, sp: c.sp, mrp: c.mrp || 0, pendingQty: 0 }; })
     };
 
     CART.forEach(function (c) {
@@ -1091,7 +1131,8 @@
     else showToast('Saved as ' + lastSavedBill.invoiceNo);
 
     document.getElementById('deliveryModal').classList.remove('show');
-    renderReceipt(lastSavedBill, 'printArea');
+    if (lastSavedBill.customerType === 'Retail') renderRetailPrintReceipt(lastSavedBill, 'printArea');
+    else renderReceipt(lastSavedBill, 'printArea');
     document.getElementById('printModal').classList.add('show');
   }
 
@@ -1176,12 +1217,62 @@
       '<div class="receipt-total-row"><span>Cash</span><span>' + money(bill.cash) + '</span></div>' +
       '<div class="receipt-total-row"><span>Online</span><span>' + money(bill.online) + '</span></div>' +
       '<div class="receipt-total-row"><span>Balance</span><span>' + (bill.balance < 0 ? 'Due ' + money(-bill.balance) : money(bill.balance)) + '</span></div>' +
+      (bill.customerType === 'Retail' ? '<div style="background:var(--bg);border-radius:8px;padding:10px 12px;margin-top:10px;">' +
+        '<p style="font-size:11px;font-weight:700;color:var(--green-800);text-transform:uppercase;margin:0 0 6px;">Retail / MRP Summary</p>' +
+        '<div class="receipt-total-row"><span>Total MRP</span><span>' + money(bill.totalMrp) + '</span></div>' +
+        '<div class="receipt-total-row"><span>Discount (' + trimNum(bill.discountPercent) + '%)</span><span>' + money(bill.discountAmount) + '</span></div>' +
+        '<div class="receipt-total-row grand"><span>Net Amount</span><span>' + money(bill.netAmount) + '</span></div>' +
+      '</div>' : '') +
       '<p style="font-size:11px;color:var(--ink-soft);margin-top:10px;border-top:1px dashed var(--line);padding-top:8px;">Rs. (in words): ' + numberToWordsIndian(bill.totalDP) + '</p>' +
       (bill.salesman ? '<p style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">Billed by ' + escapeHtml(bill.salesman) + '</p>' : '') +
       '<div style="font-size:10.5px;color:var(--ink-faint);margin-top:14px;line-height:1.7;">' +
         '<p style="margin:2px 0;">भूल-चूक लेनी-देनी।</p>' +
         '<p style="margin:2px 0;">बिका हुआ सामान वापस नहीं होगा और न ही बदली होगी।</p>' +
         '<p style="margin:2px 0;">यह बिल बिलिंग दिनांक से 7 दिनों तक वैध है उसके बाद SP की कोई जवाबदेही नहीं होगी।</p>' +
+        '<p style="margin:2px 0;">प्रोडक्ट को अच्छे से काउंट करके लेवे, जाने के बाद कोई जवाबदेही नहीं होगी।</p>' +
+        '<p style="margin:2px 0;">थैला या कैरी बैग का अलग से चार्ज लगेगा।</p>' +
+      '</div>' +
+      '<div style="margin-top:28px;text-align:right;">' +
+        '<div style="border-top:1px solid var(--ink-faint);display:inline-block;padding-top:4px;width:170px;font-size:11px;color:var(--ink-soft);">Customer\'s Signature</div>' +
+      '</div>' +
+      '<p style="text-align:center;font-size:12px;color:var(--ink-faint);margin-top:14px;">Thank you for shopping with us!</p>';
+  }
+
+  // Retail bills print an MRP-only version (no DP, no SP) - the customer only
+  // ever sees MRP pricing and the discount, never the internal DP/SP figures.
+  function renderRetailPrintReceipt(bill, targetId) {
+    const rows = bill.items.map(function (it) {
+      const mrp = Number(it.mrp) || 0;
+      return '<tr><td>' + escapeHtml(it.name) + '</td><td class="num">' + trimNum(it.qty) + '</td>' +
+        '<td class="num">' + money(mrp) + '</td><td class="num">' + money(it.qty * mrp) + '</td></tr>';
+    }).join('');
+    const dateStr = new Date(bill.date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+
+    document.getElementById(targetId).innerHTML =
+      '<div class="receipt-head" style="border-bottom:2px solid var(--green-800);padding-bottom:14px;margin-bottom:14px;">' +
+        '<img src="' + LOGO_DATA_URI + '" alt="Logo" style="width:72px;height:72px;border-radius:50%;margin-bottom:8px;box-shadow:0 0 0 2px var(--gold-500);">' +
+        '<h2 style="font-size:22px;letter-spacing:.4px;margin-bottom:4px;">' + escapeHtml(SETTINGS.companyName || 'Mahakal Wellness') + '</h2>' +
+        (SETTINGS.address ? '<p style="font-size:12px;color:var(--ink-soft);margin:2px 0;">' + escapeHtml(SETTINGS.address) + '</p>' : '') +
+        (SETTINGS.mobile || SETTINGS.mobile2 ? '<p style="font-size:12px;color:var(--ink-soft);margin:2px 0;font-weight:600;">Mobile: ' + escapeHtml(SETTINGS.mobile || '') + (SETTINGS.mobile2 ? ', ' + escapeHtml(SETTINGS.mobile2) : '') + '</p>' : '') +
+        (SETTINGS.fssai ? '<p style="font-size:10px;color:var(--ink-faint);margin:6px 0 0;">FSSAI No: ' + escapeHtml(SETTINGS.fssai) + '</p>' : '') +
+      '</div>' +
+      '<div class="receipt-meta"><span>Bill No: <strong>' + bill.invoiceNo + '</strong></span><span>' + dateStr + '</span></div>' +
+      (bill.customerName || bill.mobile ? '<p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px;">' +
+        escapeHtml(bill.customerName || 'Customer') + (bill.mobile ? ' · ' + escapeHtml(bill.mobile) : '') + '</p>' : '') +
+      '<table class="receipt-table"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">MRP</th><th class="num">Amount</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table>' +
+      '<div class="receipt-total-row"><span>Qty</span><span>' + trimNum(bill.totalQty) + '</span></div>' +
+      '<div class="receipt-total-row"><span>Total MRP</span><span>' + money(bill.totalMrp) + '</span></div>' +
+      '<div class="receipt-total-row"><span>Discount (' + trimNum(bill.discountPercent) + '%)</span><span>' + money(bill.discountAmount) + '</span></div>' +
+      '<div class="receipt-total-row grand"><span>Net Amount</span><span>' + money(bill.netAmount) + '</span></div>' +
+      '<div class="receipt-total-row"><span>Cash</span><span>' + money(bill.cash) + '</span></div>' +
+      '<div class="receipt-total-row"><span>Online</span><span>' + money(bill.online) + '</span></div>' +
+      '<div class="receipt-total-row"><span>Balance</span><span>' + (bill.balance < 0 ? 'Due ' + money(-bill.balance) : money(bill.balance)) + '</span></div>' +
+      '<p style="font-size:11px;color:var(--ink-soft);margin-top:10px;border-top:1px dashed var(--line);padding-top:8px;">Rs. (in words): ' + numberToWordsIndian(bill.netAmount) + '</p>' +
+      (bill.salesman ? '<p style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">Billed by ' + escapeHtml(bill.salesman) + '</p>' : '') +
+      '<div style="font-size:10.5px;color:var(--ink-faint);margin-top:14px;line-height:1.7;">' +
+        '<p style="margin:2px 0;">भूल-चूक लेनी-देनी।</p>' +
+        '<p style="margin:2px 0;">बिका हुआ सामान वापस नहीं होगा और न ही बदली होगी।</p>' +
         '<p style="margin:2px 0;">प्रोडक्ट को अच्छे से काउंट करके लेवे, जाने के बाद कोई जवाबदेही नहीं होगी।</p>' +
         '<p style="margin:2px 0;">थैला या कैरी बैग का अलग से चार्ज लगेगा।</p>' +
       '</div>' +
@@ -1516,6 +1607,7 @@
   }
 
   let currentDetailInvoice = null, currentDetailMobile = '', currentDetailShareToken = null;
+  let currentDetailBill = null;
   async function viewBill(invoiceNo, allowPaymentEdit) {
     currentDetailInvoice = invoiceNo;
     const { data: header } = await sb.from('invoices').select('*').eq('invoice_no', invoiceNo).maybeSingle();
@@ -1529,11 +1621,13 @@
 
     const bill = {
       invoiceNo: header.invoice_no, date: header.invoice_date, totalQty: header.total_qty, totalDP: header.total_dp, totalSP: header.total_sp,
-      cash: header.cash, online: header.online, balance: header.balance, salesman: header.salesman,
+      totalMrp: header.total_mrp, discountPercent: header.discount_percent, discountAmount: header.discount_amount, netAmount: header.net_amount,
+      cash: header.cash, online: header.online, balance: header.balance, salesman: header.salesman, customerType: header.customer_type,
       customerName: header.customer_name, mobile: header.mobile, idName: header.id_name, idNo: header.id_no,
       referenceName: header.reference_name, referenceMobile: header.reference_mobile,
-      items: (items || []).map(function (it) { return { name: it.product_name, qty: it.qty, dp: it.dp, sp: it.sp, pendingQty: it.pending_qty }; })
+      items: (items || []).map(function (it) { return { name: it.product_name, qty: it.qty, dp: it.dp, sp: it.sp, mrp: it.mrp, pendingQty: it.pending_qty }; })
     };
+    currentDetailBill = bill;
     renderReceipt(bill, 'detailArea');
     renderOfficialDeliveryPaymentHistory(officialRows || [], deliveryRows || [], paymentRows || []);
     // Payment recording is only offered when opened from Accounting - Past Bill is view/print/share only.
@@ -1602,14 +1696,21 @@
   }
 
   function hideDetail() { document.getElementById('detailModal').classList.remove('show'); }
-  function printFromDetail() { preparePrintDuplicate_('detailArea'); window.print(); }
+  function getDetailPrintSourceId_() {
+    if (currentDetailBill && currentDetailBill.customerType === 'Retail') {
+      renderRetailPrintReceipt(currentDetailBill, 'retailDetailPrintArea');
+      return 'retailDetailPrintArea';
+    }
+    return 'detailArea';
+  }
+  function printFromDetail() { preparePrintDuplicate_(getDetailPrintSourceId_()); window.print(); }
   function downloadPdfFromDetail() {
     showToast('Preparing PDF…');
-    html2pdf().set({ margin: 8, filename: currentDetailInvoice + '.pdf', jsPDF: { unit: 'mm', format: 'a5' } }).from(document.getElementById('detailArea')).save();
+    html2pdf().set({ margin: 8, filename: currentDetailInvoice + '.pdf', jsPDF: { unit: 'mm', format: 'a5' } }).from(document.getElementById(getDetailPrintSourceId_())).save();
   }
   function shareWhatsappFromDetail() {
     showToast('Preparing PDF…');
-    html2pdf().set({ margin: 8, filename: currentDetailInvoice + '.pdf', jsPDF: { unit: 'mm', format: 'a5' } }).from(document.getElementById('detailArea')).save().then(function () {
+    html2pdf().set({ margin: 8, filename: currentDetailInvoice + '.pdf', jsPDF: { unit: 'mm', format: 'a5' } }).from(document.getElementById(getDetailPrintSourceId_())).save().then(function () {
       let digits = String(currentDetailMobile || '').replace(/\D/g, ''); if (digits.length === 10) digits = '91' + digits;
       const text = buildBillShareText_(currentDetailInvoice, currentDetailShareToken, null);
       const waUrl = digits ? 'https://wa.me/' + digits + '?text=' + encodeURIComponent(text) : 'https://wa.me/?text=' + encodeURIComponent(text);
